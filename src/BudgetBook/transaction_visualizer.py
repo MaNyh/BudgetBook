@@ -414,38 +414,64 @@ class TransactionVisualizer:
         return df
 
     def plot_pie_chart_per_cateogry(self):
-
         if not self.dataset_is_valid():
             return go.Figure()
 
-        amount_per_category = self._get_abs_payment_amount_per_category()
-        total_months = self._total_months_in_dataset()
+        def create_pie_trace(show_net):
+            if show_net:
+                amount_per_category = self._get_net_amount_per_category()
+            else:
+                amount_per_category = self._get_abs_payment_amount_per_category()
 
-        average_payment_per_month = self._get_avg_payment_per_month_and_category(amount_per_category, total_months)
+            total_months = self._total_months_in_dataset()
+            average_payment_per_month = self._get_avg_payment_per_month_and_category(amount_per_category, total_months)
 
-        fig = go.Figure()
-        fig.add_trace(
-            go.Pie(
+            return go.Pie(
                 values=amount_per_category,
                 labels=amount_per_category.index,
                 text=average_payment_per_month,
-                textinfo="percent",
+                textinfo='percent',
                 hovertemplate=f"%{{label}} (%{{percent}})<br>"
-                f"∅ %{{text:.2f}} {CURRENCY_SYMBOL}/Month<br>"
-                f"Total: %{{value:.2f}} {CURRENCY_SYMBOL}<extra></extra>",
+                              f"∅ %{{text:.2f}} {CURRENCY_SYMBOL}/Month<br>"
+                              f"Total: %{{value:.2f}} {CURRENCY_SYMBOL}<extra></extra>",
+                marker=dict(
+                    colors=[self.category_to_color_map[c] for c in amount_per_category.index]
+                )
             )
-        )
-        fig.update_traces(
-            marker=dict(
-                colors=[
-                    self.category_to_color_map[c] for c in amount_per_category.index
-                ]
-            )
-        )
+
+        fig = go.Figure()
+
+        fig.add_trace(create_pie_trace(show_net=False))
+
         fig.update_layout(
             title="Payments per Category",
             margin=dict(l=0, r=0),
+            updatemenus=[
+                {
+                    "buttons": [
+                        {
+                            "label": "Payments",
+                            "method": "restyle",
+                            "args": [{"values": [self._get_abs_payment_amount_per_category()]}],
+                            "args2": [{"title": "Payments"}]
+                        },
+                        {
+                            "label": "Net Payments",
+                            "method": "restyle",
+                            "args": [{"values": [self._get_net_amount_per_category()]}],
+                            "args2": [{"title": "Net Amount per Category"}]
+                        }
+                    ],
+                    "direction": "down",
+                    "showactive": True,
+                    "x": 0.5,
+                    "xanchor": "center",
+                    "y": 1.2,
+                    "yanchor": "top"
+                }
+            ]
         )
+
         return fig
 
     def _get_avg_payment_per_month_and_category(self, amount_per_category, total_months):
@@ -462,6 +488,14 @@ class TransactionVisualizer:
             + (1 if total_time_delta.days > 15 else 0)
         )
         return total_months
+
+    def _get_net_amount_per_category(self):
+        grouped_per_category = self._dataframe_cache[
+            np.abs(self._dataframe_cache[DataColumns.AMOUNT]) > 0
+        ].groupby(by=DataColumns.CATEGORY)
+        amount_per_category_all = grouped_per_category[DataColumns.AMOUNT].sum()
+        amount_per_category = amount_per_category_all[amount_per_category_all < 0].abs()
+        return amount_per_category
 
     def _get_abs_payment_amount_per_category(self):
         grouped_per_category = self._dataframe_cache[
