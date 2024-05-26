@@ -414,13 +414,17 @@ server = Flask(__name__)
 budget_book = Dash(__name__, server=server, external_stylesheets=[dbc.themes.COSMO])
 
 def uploaded_csv_to_iostream(contents, filename):
-    if ".csv" not in filename:
+    if (".csv" not in filename and ".CSV" not in filename):
         return
 
     content_type, content_string = contents.split(",")
 
     decoded = base64.b64decode(content_string)
-    iostream = io.StringIO(decoded.decode("utf-8"))
+    try:
+        iostream = io.StringIO(decoded.decode("utf-8"))
+    except UnicodeDecodeError:
+        iostream = io.StringIO(decoded.decode("latin-1"))
+
     return iostream
 
 
@@ -481,7 +485,7 @@ def update_output(start_date, end_date, n_clicks, contents, filenames, status_cl
     if ctx.triggered[0]["prop_id"] == "upload-data.contents":
         invalid_filename = False
         for filename in filenames:
-            if not filename.endswith(".csv"):
+            if not (filename.endswith(".csv") or filename.endswith(".CSV")):
                 status_text, status_class = set_error(
                     "Invalid file type selected. Only CSV is supported!"
                 )
